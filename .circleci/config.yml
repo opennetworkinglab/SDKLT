@@ -1,0 +1,75 @@
+#
+# Copyright 2019-present Open Networking Foundation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+version: 2.1
+
+jobs:
+  build:
+    docker:
+      - image: debian:testing
+    environment:
+      - SDK:
+    steps:
+      - run:
+          name: Setup build environment
+          command: |
+            apt update
+            apt install -y --no-install-recommends libyaml-dev python python-pip python-setuptools libelf-dev wget clang-8 gcc-9 make git ca-certificates ssh
+            update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 10
+            update-alternatives --install /usr/bin/clang clang /usr/bin/clang-8 10
+            update-alternatives --install /usr/bin/cc cc /usr/bin/clang 10
+            pip install pyyaml
+      - run:
+          name: Get Kernel sources
+          command: |
+            pushd $HOME
+            wget https://github.com/opennetworkinglab/OpenNetworkLinux/releases/download/onlpv2-dev-1.0.1/linux-4.14.49-OpenNetworkLinux.tar.xz
+            tar xf linux-4.14.49-OpenNetworkLinux.tar.xz
+            rm linux-4.14.49-OpenNetworkLinux.tar.xz
+            popd
+      - checkout
+      - run:
+          name: Build SDKLT
+          command: .circleci/build-sdklt.sh
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - sdklt-4.14.49.tgz
+
+  publish-github-release:
+    docker:
+      - image: circleci/golang:1.10
+    steps:
+      - attach_workspace:
+          at: ./artifacts
+      - run:
+          name: "Publish Release on GitHub"
+          command: |
+            go get -u github.com/tcnksm/ghr
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete r${CIRCLE_BUILD_NUM} ./artifacts/
+
+
+workflows:
+  version: 2
+  sdklt:
+    jobs:
+      - build
+      - publish-github-release:
+          requires:
+            - build
+          filters:
+            branches:
+              only: master
