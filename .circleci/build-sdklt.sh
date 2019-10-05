@@ -20,6 +20,7 @@ export SDK=$SDKLT/src
 # export CC=clang-3.9
 # export LD=lld-3.9
 # export ADD_CFLAGS="-g -fno-omit-frame-pointer -O0"
+# export ADD_LDFLAGS=""
 
 cd $SDK/appl/demo
 make TARGET_PLATFORM=xlr_linux clean -j

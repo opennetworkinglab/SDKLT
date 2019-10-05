@@ -40,12 +40,26 @@ jobs:
             popd
       - checkout
       - run:
+          name: Create build directory
+          command: mkdir -p ~/build
+      - run:
           name: Build SDKLT
-          command: .circleci/build-sdklt.sh
+          command: |
+            export ADD_CFLAGS="-fomit-frame-pointer -O3"
+            .circleci/build-sdklt.sh
+            mv ~/sdklt-4.14.49.tgz ~/build/sdklt-4.14.49.tgz
+      - run:
+          name: Build SDKLT debug
+          command: |
+            export ADD_CFLAGS="-g -fno-omit-frame-pointer -O0 -fsanitize=address"
+            export ADD_LDFLAGS="-fsanitize=address"
+            .circleci/build-sdklt.sh
+            mv ~/sdklt-4.14.49.tgz ~/build/sdklt-debug-4.14.49.tgz
       - persist_to_workspace:
-          root: ~/
+          root: ~/build/
           paths:
             - sdklt-4.14.49.tgz
+            - sdklt-debug-4.14.49.tgz
 
   publish-github-release:
     docker:
