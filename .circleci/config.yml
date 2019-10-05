@@ -59,6 +59,17 @@ jobs:
             go get -u github.com/tcnksm/ghr
             ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete r${CIRCLE_BUILD_NUM} ./artifacts/
 
+  publish-github-pre-release:
+    docker:
+      - image: circleci/golang:1.10
+    steps:
+      - attach_workspace:
+          at: ./artifacts
+      - run:
+          name: "Publish Release on GitHub"
+          command: |
+            go get -u github.com/tcnksm/ghr
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete -prerelease ${CIRCLE_BRANCH} ./artifacts/
 
 workflows:
   version: 2
@@ -71,3 +82,9 @@ workflows:
           filters:
             branches:
               only: master
+      - publish-github-pre-release:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore: master
