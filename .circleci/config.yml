@@ -20,8 +20,6 @@ jobs:
   build:
     docker:
       - image: debian:testing
-    environment:
-      - SDK:
     steps:
       - run:
           name: Setup build environment
