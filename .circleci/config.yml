@@ -16,50 +16,80 @@
 
 version: 2.1
 
-jobs:
-  build:
-    docker:
-      - image: debian:testing
+commands:
+  build-sdklt:
+    description: "Build SDKLT for a given Kernel version"
+    parameters:
+      kernel_version:
+        type: string
     steps:
       - run:
           name: Setup build environment
           command: |
             apt update
-            apt install -y --no-install-recommends libyaml-dev python python-pip python-setuptools libelf-dev wget clang-8 gcc-9 make git ca-certificates ssh
-            update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 10
-            update-alternatives --install /usr/bin/clang clang /usr/bin/clang-8 10
-            update-alternatives --install /usr/bin/cc cc /usr/bin/clang 10
+            apt install -y --no-install-recommends libyaml-dev python python-pip python-setuptools libelf-dev wget make git ca-certificates ssh
             pip install pyyaml
       - run:
           name: Get Kernel sources
           command: |
             pushd $HOME
-            wget https://github.com/opennetworkinglab/OpenNetworkLinux/releases/download/onlpv2-dev-1.0.1/linux-4.14.49-OpenNetworkLinux.tar.xz
-            tar xf linux-4.14.49-OpenNetworkLinux.tar.xz
-            rm linux-4.14.49-OpenNetworkLinux.tar.xz
+            wget https://github.com/opennetworkinglab/OpenNetworkLinux/releases/download/onlpv2-dev-1.0.1/linux-<< parameters.kernel_version >>-OpenNetworkLinux.tar.xz
+            tar xf linux-<< parameters.kernel_version >>-OpenNetworkLinux.tar.xz
+            rm linux-<< parameters.kernel_version >>-OpenNetworkLinux.tar.xz
             popd
       - checkout
       - run:
-          name: Create build directory
-          command: mkdir -p ~/build
+          name: Create staging directory
+          command: mkdir -p ~/staging
       - run:
           name: Build SDKLT
           command: |
             export ADD_CFLAGS="-fomit-frame-pointer -O3"
-            .circleci/build-sdklt.sh
-            mv ~/sdklt-4.14.49.tgz ~/build/sdklt-4.14.49.tgz
+            KERNEL_VERSION=<< parameters.kernel_version >> .circleci/build-sdklt.sh
+            mv ~/sdklt-<< parameters.kernel_version >>.tgz ~/staging/sdklt-<< parameters.kernel_version >>.tgz
       - run:
           name: Build SDKLT debug
           command: |
             export ADD_CFLAGS="-g -fno-omit-frame-pointer -O0 -fsanitize=address"
             export ADD_LDFLAGS="-fsanitize=address"
-            .circleci/build-sdklt.sh
-            mv ~/sdklt-4.14.49.tgz ~/build/sdklt-debug-4.14.49.tgz
+            KERNEL_VERSION=<< parameters.kernel_version >> .circleci/build-sdklt.sh
+            mv ~/sdklt-<< parameters.kernel_version >>.tgz ~/staging/sdklt-debug-<< parameters.kernel_version >>.tgz
       - persist_to_workspace:
-          root: ~/build/
+          root: ~/staging/
           paths:
-            - sdklt-4.14.49.tgz
-            - sdklt-debug-4.14.49.tgz
+            - sdklt-<< parameters.kernel_version >>.tgz
+            - sdklt-debug-<< parameters.kernel_version >>.tgz
+
+jobs:
+  build-4-14-49:
+    docker:
+      - image: debian:testing
+    steps:
+      - run:
+          name: Setup compiler
+          command: |
+            apt update
+            apt install -y --no-install-recommends clang-8 gcc-9
+            update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 10
+            update-alternatives --install /usr/bin/clang clang /usr/bin/clang-8 10
+            update-alternatives --install /usr/bin/cc cc /usr/bin/clang 10
+      - build-sdklt:
+          kernel_version: "4.14.49"
+
+  build-3-16-56:
+    docker:
+      - image: debian:stretch
+    steps:
+      - run:
+          name: Setup compiler
+          command: |
+            apt update
+            apt install -y --no-install-recommends clang-4.0 gcc-6
+            update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-6 10
+            update-alternatives --install /usr/bin/clang clang /usr/bin/clang-4.0 10
+            update-alternatives --install /usr/bin/cc cc /usr/bin/clang 10
+      - build-sdklt:
+          kernel_version: "3.16.56"
 
   publish-github-release:
     docker:
@@ -89,16 +119,19 @@ workflows:
   version: 2
   sdklt:
     jobs:
-      - build
+      - build-4-14-49
+      - build-3-16-56
       - publish-github-release:
           requires:
-            - build
+            - build-4-14-49
+            - build-3-16-56
           filters:
             branches:
               only: master
       - publish-github-pre-release:
           requires:
-            - build
+            - build-4-14-49
+            - build-3-16-56
           filters:
             branches:
               ignore: master
